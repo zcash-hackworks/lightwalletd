@@ -59,6 +59,11 @@ func (b *Block) GetDisplayPrevHash() []byte {
 	return b.hdr.GetDisplayPrevHash()
 }
 
+// EqualHash indicates if the block's hash matches the given hash
+func (b *Block) EqualHash(hash []byte) bool {
+	return b.hdr.EqualHash(hash)
+}
+
 // HasSaplingTransactions indicates if the block contains any Sapling tx.
 func (b *Block) HasSaplingTransactions() bool {
 	for _, tx := range b.vtx {

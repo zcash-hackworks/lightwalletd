@@ -115,13 +115,23 @@ func GetSaplingInfo() (int, int, string, string) {
 		blockchaininfo.Consensus.Nextblock
 }
 
-func getBlockFromRPC(height int) (*walletrpc.CompactBlock, error) {
+func getBlockFromRPC(blockID walletrpc.BlockID) (*walletrpc.CompactBlock, error) {
+	// The zcash getblock rpc accepts either a block height or block hash
 	params := make([]json.RawMessage, 2)
-	heightJSON, err := json.Marshal(strconv.Itoa(height))
-	if err != nil {
-		return nil, errors.Wrap(err, "error marshaling height")
+	if blockID.Hash != nil {
+		// id.Hash is big-endian, keep in big-endian for the rpc
+		hashJSON, err := json.Marshal(hex.EncodeToString(blockID.Hash))
+		if err != nil {
+			return nil, errors.Wrap(err, "error marshaling block hash")
+		}
+		params[0] = hashJSON
+	} else {
+		heightJSON, err := json.Marshal(strconv.Itoa(int(blockID.Height)))
+		if err != nil {
+			return nil, errors.Wrap(err, "error marshaling height")
+		}
+		params[0] = heightJSON
 	}
-	params[0] = heightJSON
 	params[1] = json.RawMessage("0") // non-verbose (raw hex)
 	result, rpcErr := RawRequest("getblock", params)
 
@@ -135,7 +145,7 @@ func getBlockFromRPC(height int) (*walletrpc.CompactBlock, error) {
 	}
 
 	var blockDataHex string
-	err = json.Unmarshal(result, &blockDataHex)
+	err := json.Unmarshal(result, &blockDataHex)
 	if err != nil {
 		return nil, errors.Wrap(err, "error reading JSON response")
 	}
@@ -154,10 +164,20 @@ func getBlockFromRPC(height int) (*walletrpc.CompactBlock, error) {
 		return nil, errors.New("received overlong message")
 	}
 
-	if block.GetHeight() != height {
-		return nil, errors.New("received unexpected height block")
+	if blockID.Hash != nil {
+		if !block.EqualHash(blockID.Hash) {
+			Log.Fatal(
+				"incorrect hash height ", block.GetHeight(),
+				" block hash ", block.GetDisplayHash(),
+				" expected ", blockID.Hash)
+		}
+	} else {
+		if block.GetHeight() != int(blockID.Height) {
+			Log.Fatal(
+				"incorrect height ", block.GetHeight(),
+				" expected ", blockID.Height)
+		}
 	}
-
 	return block.ToCompact(), nil
 }
 
@@ -198,7 +218,7 @@ func BlockIngestor(c *BlockCache, rep int) {
 		}
 
 		height := c.GetNextHeight()
-		block, err := getBlockFromRPC(height)
+		block, err := getBlockFromRPC(walletrpc.BlockID{Height: uint64(height)})
 		if err != nil {
 			Log.WithFields(logrus.Fields{
 				"height": height,
@@ -285,15 +305,15 @@ func BlockIngestor(c *BlockCache, rep int) {
 // GetBlock returns the compact block at the requested height, first by querying
 // the cache, then, if not found, will request the block from zcashd. It returns
 // nil if no block exists at this height.
-func GetBlock(cache *BlockCache, height int) (*walletrpc.CompactBlock, error) {
+func GetBlock(cache *BlockCache, blockID walletrpc.BlockID) (*walletrpc.CompactBlock, error) {
 	// First, check the cache to see if we have the block
-	block := cache.Get(height)
+	block := cache.Get(blockID)
 	if block != nil {
 		return block, nil
 	}
 
 	// Not in the cache, ask zcashd
-	block, err := getBlockFromRPC(height)
+	block, err := getBlockFromRPC(blockID)
 	if err != nil {
 		return nil, err
 	}
@@ -305,10 +325,23 @@ func GetBlock(cache *BlockCache, height int) (*walletrpc.CompactBlock, error) {
 }
 
 // GetBlockRange returns a sequence of consecutive blocks in the given range.
-func GetBlockRange(cache *BlockCache, blockOut chan<- *walletrpc.CompactBlock, errOut chan<- error, start, end int) {
+func GetBlockRange(cache *BlockCache, blockOut chan<- *walletrpc.CompactBlock, errOut chan<- error, start, end walletrpc.BlockID) {
 	// Go over [start, end] inclusive
-	for i := start; i <= end; i++ {
-		block, err := GetBlock(cache, i)
+
+	startBlock, err := GetBlock(cache, start)
+	if err != nil {
+		errOut <- err
+		return
+	}
+	startHeight := startBlock.GetHeight()
+	endBlock, err := GetBlock(cache, end)
+	if err != nil {
+		errOut <- err
+		return
+	}
+	endHeight := endBlock.GetHeight()
+	for i := startHeight; i <= endHeight; i++ {
+		block, err := GetBlock(cache, walletrpc.BlockID{Height: uint64(i)})
 		if err != nil {
 			errOut <- err
 			return

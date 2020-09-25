@@ -9,14 +9,13 @@ option swift_prefix = "";
 import "compact_formats.proto";
 
 // A BlockID message contains identifiers to select a block: a height or a
-// hash. Specification by hash is not implemented, but may be in the future.
+// hash in le order.
 message BlockID {
      uint64 height = 1;
      bytes hash = 2;
 }
 
 // BlockRange specifies a series of blocks from start to end inclusive.
-// Both BlockIDs must be heights; specification by hash is not yet supported.
 message BlockRange {
     BlockID start = 1;
     BlockID end = 2;
@@ -100,6 +99,14 @@ message Exclude {
     repeated bytes txid = 1;
 }
 
+message TreeState {
+    string network = 1; // mainnet or testnet
+    uint64 height = 2;  // blockheight
+    bytes hash = 3;     // block id (le order)
+    uint32 time = 4;    // Unix epoch time when the block was mined
+    bytes tree = 5;     // commitment tree state
+}
+
 service CompactTxStreamer {
     // Return the height of the tip of the best chain
     rpc GetLatestBlock(ChainSpec) returns (BlockID) {}
@@ -128,6 +135,12 @@ service CompactTxStreamer {
     // match a shortened txid, they are all sent (none is excluded). Transactions
     // in the exclude list that don't exist in the mempool are ignored.
     rpc GetMempoolTx(Exclude) returns (stream CompactTx) {}
+
+    // GetTreeState returns the note commitment tree state corresponding to the given block.
+    // See section 3.7 of the zcash protocol specification. It returns several other useful
+    // values also (even though they can be obtained using GetBlock).
+    // The block can be specified by either height or hash.
+    rpc GetTreeState(BlockID) returns (TreeState) {}
 
     // Return information about this lightwalletd instance and the blockchain
     rpc GetLightdInfo(Empty) returns (LightdInfo) {}

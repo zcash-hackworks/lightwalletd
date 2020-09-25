@@ -274,14 +274,76 @@ func TestBlockIngestor(t *testing.T) {
 	os.RemoveAll(unitTestPath)
 }
 
+// There are four test blocks, 0..3
+func getblockStubRange(method string, params []json.RawMessage) (json.RawMessage, error) {
+	var height string
+	err := json.Unmarshal(params[0], &height)
+	if err != nil {
+		testT.Fatal("could not unmarshal height")
+	}
+
+	step++
+	switch step {
+	case 1:
+		if height != "380640" {
+			testT.Error("unexpected height")
+		}
+		// Sunny-day
+		return blocks[0], nil
+	case 2:
+		if height != "380642" {
+			testT.Error("unexpected height")
+		}
+		// Sunny-day
+		return blocks[2], nil
+	case 3:
+		if height != "380640" {
+			testT.Error("unexpected height")
+		}
+		// Sunny-day
+		return blocks[0], nil
+	case 4:
+		if height != "380641" {
+			testT.Error("unexpected height")
+		}
+		// Sunny-day
+		return blocks[1], nil
+	case 5:
+		if height != "380642" {
+			testT.Error("unexpected height", height)
+		}
+		// Simulate that we're synced (caught up);
+		// this should cause one 10s sleep (then retry).
+		return nil, errors.New("-8: Block height out of range")
+
+	// nonoverlap range test:
+	case 6:
+		if height != "380641" {
+			testT.Error("unexpected height")
+		}
+		// Sunny-day
+		return blocks[1], nil
+	case 7:
+		if height != "380640" {
+			testT.Error("unexpected height")
+		}
+		return blocks[0], nil
+	}
+	testT.Error("getblockStub called too many times")
+	return nil, nil
+}
+
 func TestGetBlockRange(t *testing.T) {
 	testT = t
-	RawRequest = getblockStub
+	RawRequest = getblockStubRange
 	os.RemoveAll(unitTestPath)
 	testcache := NewBlockCache(unitTestPath, unitTestChain, 380640, true)
 	blockChan := make(chan *walletrpc.CompactBlock)
 	errChan := make(chan error)
-	go GetBlockRange(testcache, blockChan, errChan, 380640, 380642)
+	go GetBlockRange(
+		testcache, blockChan, errChan,
+		walletrpc.BlockID{Height: 380640},
+		walletrpc.BlockID{Height: 380642})
 
 	// read in block 380640
 	select {
@@ -316,8 +378,10 @@ func TestGetBlockRange(t *testing.T) {
 		t.Fatal("reading height 22 should have failed")
 	}
 
-	// check goroutine GetBlockRange() reaching the end of the range (and exiting)
-	go GetBlockRange(testcache, blockChan, errChan, 1, 0)
+	// check nonoverlapping range
+	go GetBlockRange(testcache, blockChan, errChan,
+		walletrpc.BlockID{Height: 380641},
+		walletrpc.BlockID{Height: 380640})
 	err := <-errChan
 	if err != nil {
 		t.Fatal("unexpected err return")

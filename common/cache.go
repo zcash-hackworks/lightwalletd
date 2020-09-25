@@ -20,14 +20,62 @@ import (
 )
 
 // BlockCache contains a consecutive set of recent compact blocks in marshalled form.
-type BlockCache struct {
-	lengthsName, blocksName string // pathnames
-	lengthsFile, blocksFile *os.File
-	starts                  []int64 // Starting offset of each block within blocksFile
-	firstBlock              int     // height of the first block in the cache (usually Sapling activation)
-	nextBlock               int     // height of the first block not in the cache
-	latestHash              []byte  // hash of the most recent (highest height) block, for detecting reorgs.
-	mutex                   sync.RWMutex
+type (
+	hashSmall  [4]byte
+	hashLarge  [32]byte
+	BlockCache struct {
+		lengthsName, blocksName string // pathnames
+		lengthsFile, blocksFile *os.File
+		starts                  []int64 // Starting offset of each block within blocksFile
+		firstBlock              int     // height of the first block in the cache (usually Sapling activation)
+		nextBlock               int     // height of the first block not in the cache
+		latestHash              []byte  // hash of the most recent (highest height) block, for detecting reorgs.
+		mutex                   sync.RWMutex
+
+		// These give the block height for the given block hash,
+		// the large map is for collisions (always check first).
+		blockHashMapLarge map[hashLarge]int
+		blockHashMapSmall map[hashSmall]int
+	}
+)
+
+// getHeightFromHash returns the block height for a given hash, or -1 if not found.
+// The hash argument must be little-endian.
+func (c *BlockCache) getHeightFromHash(hashSlice []byte) int {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	var hl hashLarge
+	copy(hl[:], hashSlice)
+	if h, ok := c.blockHashMapLarge[hl]; ok {
+		if h >= c.nextBlock {
+			return -1
+		}
+		return h
+	}
+	var hs hashSmall
+	copy(hs[:], hashSlice)
+	if h, ok := c.blockHashMapSmall[hs]; ok {
+		if h >= c.nextBlock {
+			return -1
+		}
+		return h
+	}
+	return -1
+}
+
+// Add an entry to the block hash map.
+// The hash argument must be little-endian.
+func (c *BlockCache) addBlockHashMap(hashSlice []byte, height int) {
+	var hs hashSmall
+	var hl hashLarge
+	copy(hs[:], hashSlice)
+	copy(hl[:], hashSlice)
+	if h, ok := c.blockHashMapSmall[hs]; ok && h != height {
+		c.blockHashMapLarge[hl] = height
+	} else {
+		c.blockHashMapSmall[hs] = h
+		delete(c.blockHashMapLarge, hl)
+	}
 }
 
 // GetNextHeight returns the height of the lowest unobtained block.
@@ -59,12 +107,13 @@ func (c *BlockCache) HashMismatch(prevhash []byte) bool {
 	return c.latestHash != nil && !bytes.Equal(c.latestHash, prevhash)
 }
 
-// Make the block at the given height the lowest height that we don't have.
+// Make the block at the given height the first height that we don't have.
 // In other words, wipe out this height and beyond.
-// This should never increase the size of the cache, only decrease.
 // Caller should hold c.mutex.Lock().
 func (c *BlockCache) setDbFiles(height int) {
 	if height <= c.nextBlock {
+		// we could remove entries from the block hash maps,
+		// but it's not worth it, and does no harm.
 		if height < c.firstBlock {
 			height = c.firstBlock
 		}
@@ -220,6 +269,8 @@ func NewBlockCache(dbPath string, chainName string, startHeight int, redownload 
 	if err != nil {
 		Log.Fatal("read ", c.lengthsName, " failed: ", err)
 	}
+	c.blockHashMapLarge = make(map[hashLarge]int, 0)
+	c.blockHashMapSmall = make(map[hashSmall]int, 0)
 
 	// The last entry in starts[] is where to write the next block.
 	var offset int64
@@ -246,6 +297,7 @@ func NewBlockCache(dbPath string, chainName string, startHeight int, redownload 
 			c.recoverFromCorruption(c.nextBlock)
 			break
 		}
+		c.addBlockHashMap(block.Hash, i)
 		c.nextBlock++
 	}
 	c.setDbFiles(c.nextBlock)
@@ -279,13 +331,10 @@ func (c *BlockCache) Add(height int, block *walletrpc.CompactBlock) error {
 		Log.Fatal("cache.Add height going backwards: ", height)
 		return nil
 	}
-	bheight := int(block.Height)
-
-	// XXX check? TODO COINBASE-HEIGHT: restore this check after coinbase height is fixed
-	if false && bheight != height {
+	if int(block.Height) != height {
 		// This could only happen if zcashd returned the wrong
 		// block (not the height we requested).
-		Log.Fatal("cache.Add wrong height: ", bheight, " expecting: ", height)
+		Log.Fatal("cache.Add wrong height: ", block.Height, " expecting: ", height)
 		return nil
 	}
 
@@ -308,6 +357,7 @@ func (c *BlockCache) Add(height int, block *walletrpc.CompactBlock) error {
 	// update the in-memory variables
 	offset := c.starts[len(c.starts)-1]
 	c.starts = append(c.starts, offset+int64(len(data)+8))
+	c.addBlockHashMap(block.Hash, height)
 
 	if c.latestHash == nil {
 		c.latestHash = make([]byte, len(block.Hash))
@@ -346,12 +396,17 @@ func (c *BlockCache) Reorg(height int) {
 	c.setLatestHash()
 }
 
-// Get returns the compact block at the requested height if it's
+// Get returns the compact block at the requested hash or height if it's
 // in the cache, else nil.
-func (c *BlockCache) Get(height int) *walletrpc.CompactBlock {
+func (c *BlockCache) Get(blockID walletrpc.BlockID) *walletrpc.CompactBlock {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
+	var height = int(blockID.Height)
+	if blockID.Hash != nil {
+		// this takes precedence as a specification
+		height = c.getHeightFromHash(blockID.Hash)
+	}
 	if height < c.firstBlock || height >= c.nextBlock {
 		return nil
 	}

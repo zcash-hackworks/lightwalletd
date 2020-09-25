@@ -119,7 +119,7 @@ func reorgCache(t *testing.T) {
 	if cache.GetLatestHeight() != 289461 {
 		t.Fatal("unexpected GetLatestHeight")
 	}
-	if int(cache.Get(289461).Height) != 289461 {
+	if int(cache.Get(walletrpc.BlockID{Height: 289461}).Height) != 289461 {
 		t.Fatal("unexpected block contents")
 	}
 
@@ -141,7 +141,7 @@ func reorgCache(t *testing.T) {
 	if cache.GetLatestHeight() != 289462 {
 		t.Fatal("unexpected GetLatestHeight")
 	}
-	if int(cache.Get(289462).Height) != 289462 {
+	if int(cache.Get(walletrpc.BlockID{Height: 289462}).Height) != 289462 {
 		t.Fatal("unexpected block contents")
 	}
 }
@@ -173,7 +173,7 @@ func fillCache(t *testing.T) {
 		if cache.GetLatestHeight() != 289460+i {
 			t.Fatal("unexpected GetLatestHeight")
 		}
-		b := cache.Get(289460 + i)
+		b := cache.Get(walletrpc.BlockID{Height: uint64(289460 + i)})
 		if b == nil {
 			t.Fatal("unexpected Get failure")
 		}

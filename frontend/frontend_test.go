@@ -178,7 +178,7 @@ func TestGetLatestBlock(t *testing.T) {
 	}
 
 	// This does zcashd rpc "getblock", calls getblockStub() above
-	block, err := common.GetBlock(cache, 380640)
+	block, err := common.GetBlock(cache, walletrpc.BlockID{Height: 380640})
 	if err != nil {
 		t.Fatal("getBlockFromRPC failed", err)
 	}
@@ -326,15 +326,8 @@ func TestGetBlock(t *testing.T) {
 	if err == nil {
 		t.Fatal("GetBlock should have failed")
 	}
-	_, err = lwd.GetBlock(context.Background(), &walletrpc.BlockID{Hash: []byte{0}})
-	if err == nil {
-		t.Fatal("GetBlock should have failed")
-	}
-	if err.Error() != "GetBlock by Hash is not yet implemented" {
-		t.Fatal("GetBlock hash unimplemented error message failed")
-	}
 
-	// getblockStub() case 1: return error
+	// getblockStub() case 1: success
 	block, err := lwd.GetBlock(context.Background(), &walletrpc.BlockID{Height: 380640})
 	if err != nil {
 		t.Fatal("GetBlock failed:", err)
@@ -365,10 +358,40 @@ func (tg *testgetbrange) Send(cb *walletrpc.CompactBlock) error {
 	return nil
 }
 
+func getblockStubRange(method string, params []json.RawMessage) (json.RawMessage, error) {
+	step++
+	var height string
+	err := json.Unmarshal(params[0], &height)
+	if err != nil {
+		testT.Fatal("could not unmarshal height")
+	}
+	if height != "380640" {
+		testT.Fatal("unexpected getblock height", height)
+	}
+
+	// Test retry logic (for the moment, it's very simple, just one retry).
+	// With the range code, we reach here three times, once each for start
+	// and end (to get the begin and end heights) and then again for the
+	// actual fetching of the block. (It's not this inefficient with a large
+	// range!)
+	switch step {
+	case 1:
+		return blocks[0], nil
+	case 2:
+		return blocks[0], nil
+	case 3:
+		return blocks[0], nil
+	case 4:
+		return nil, errors.New("getblock test error")
+	}
+	testT.Fatal("unexpected call to getblockStubRange")
+	return nil, nil
+}
+
 func TestGetBlockRange(t *testing.T) {
 	testT = t
-	common.RawRequest = getblockStub
-	common.RawRequest = getblockStub
+	common.RawRequest = getblockStubRange
+	common.RawRequest = getblockStubRange
 	lwd, _ := testsetup()
 
 	blockrange := &walletrpc.BlockRange{

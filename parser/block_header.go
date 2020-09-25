@@ -233,3 +233,8 @@ func (hdr *BlockHeader) GetEncodableHash() []byte {
 func (hdr *BlockHeader) GetDisplayPrevHash() []byte {
 	return Reverse(hdr.HashPrevBlock)
 }
+
+// EqualHash indicates if the block's hash matches the given hash
+func (hdr *BlockHeader) EqualHash(hash []byte) bool {
+	return bytes.Equal(hdr.GetEncodableHash(), hash)
+}
