@@ -242,6 +242,15 @@ func (s *lwdStreamer) GetTreeState(ctx context.Context, id *walletrpc.BlockID) (
 	}, nil
 }
 
+func (s *lwdStreamer) GetLatestTreeState(ctx context.Context, in *walletrpc.Empty) (*walletrpc.TreeState, error) {
+	latestHeight := s.cache.GetLatestHeight()
+
+	if latestHeight == -1 {
+		return nil, errors.New("Cache is empty. Server is probably not yet ready")
+	}
+	return s.GetTreeState(ctx, &walletrpc.BlockID{Height: uint64(latestHeight)})
+}
+
 // GetTransaction returns the raw transaction bytes that are returned
 // by the zcashd 'getrawtransaction' RPC.
 func (s *lwdStreamer) GetTransaction(ctx context.Context, txf *walletrpc.TxFilter) (*walletrpc.RawTransaction, error) {

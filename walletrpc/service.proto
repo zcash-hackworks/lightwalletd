@@ -163,6 +163,7 @@ service CompactTxStreamer {
     // values also (even though they can be obtained using GetBlock).
     // The block can be specified by either height or hash.
     rpc GetTreeState(BlockID) returns (TreeState) {}
+    rpc GetLatestTreeState(Empty) returns (TreeState) {}
 
     rpc GetAddressUtxos(GetAddressUtxosArg) returns (GetAddressUtxosReplyList) {}
     rpc GetAddressUtxosStream(GetAddressUtxosArg) returns (stream GetAddressUtxosReply) {}
