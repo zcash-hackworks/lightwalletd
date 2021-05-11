@@ -172,6 +172,16 @@ func (s *lwdStreamer) GetBlockRange(span *walletrpc.BlockRange, resp walletrpc.C
 	}
 }
 
+// GetZecPrice will get the historical ZEC closing price at the requested timestamp
+func (s *lwdStreamer) GetZECPrice(ctx context.Context, in *walletrpc.PriceRequest) (*walletrpc.PriceResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+// GetCurrentZecPrice will get the current ZEC price
+func (s *lwdStreamer) GetCurrentZECPrice(ctx context.Context, in *walletrpc.Empty) (*walletrpc.PriceResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
 // GetTreeState returns the note commitment tree state corresponding to the given block.
 // See section 3.7 of the Zcash protocol specification. It returns several other useful
 // values also (even though they can be obtained using GetBlock).
