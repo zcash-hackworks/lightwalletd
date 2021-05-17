@@ -172,14 +172,38 @@ func (s *lwdStreamer) GetBlockRange(span *walletrpc.BlockRange, resp walletrpc.C
 	}
 }
 
-// GetZecPrice will get the historical ZEC closing price at the requested timestamp
 func (s *lwdStreamer) GetZECPrice(ctx context.Context, in *walletrpc.PriceRequest) (*walletrpc.PriceResponse, error) {
-	return nil, errors.New("not implemented")
+	// Check for prices before zcash was born
+	if in == nil || in.Timestamp <= 1477551600 /* Zcash birthday: 2016-10-28*/ {
+		return nil, errors.New("incorrect Timestamp")
+	}
+
+	if in.Currency != "USD" {
+		return nil, errors.New("unsupported currency")
+	}
+
+	ts := time.Unix(int64(in.Timestamp), 0)
+	price, timeFetched, err := common.GetHistoricalPrice(&ts)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &walletrpc.PriceResponse{Timestamp: timeFetched.Unix(), Price: price, Currency: "USD"}, nil
 }
 
-// GetCurrentZecPrice will get the current ZEC price
 func (s *lwdStreamer) GetCurrentZECPrice(ctx context.Context, in *walletrpc.Empty) (*walletrpc.PriceResponse, error) {
-	return nil, errors.New("not implemented")
+	price, err := common.GetCurrentPrice()
+	if err != nil {
+		return nil, err
+	}
+
+	if price <= 0 {
+		return nil, errors.New("no price available")
+	}
+
+	resp := &walletrpc.PriceResponse{Timestamp: time.Now().Unix(), Currency: "USD", Price: price}
+	return resp, nil
 }
 
 // GetTreeState returns the note commitment tree state corresponding to the given block.
