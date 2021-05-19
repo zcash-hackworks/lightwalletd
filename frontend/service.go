@@ -289,6 +289,11 @@ func (s *lwdStreamer) SendTransaction(ctx context.Context, rawtx *walletrpc.RawT
 	// Result:
 	// "hex"             (string) The transaction hash in hex
 
+	// Verify rawtx
+	if rawtx == nil || rawtx.Data == nil {
+		return nil, errors.New("Bad transaction data")
+	}
+
 	// Construct raw JSON-RPC params
 	params := make([]json.RawMessage, 1)
 	txJSON, err := json.Marshal(hex.EncodeToString(rawtx.Data))
