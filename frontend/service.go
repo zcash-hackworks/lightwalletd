@@ -57,14 +57,18 @@ func checkTaddress(taddr string) error {
 
 // GetLatestBlock returns the height of the best chain, according to zcashd.
 func (s *lwdStreamer) GetLatestBlock(ctx context.Context, placeholder *walletrpc.ChainSpec) (*walletrpc.BlockID, error) {
-	latestBlock := s.cache.GetLatestHeight()
-
-	if latestBlock == -1 {
-		return nil, errors.New("Cache is empty. Server is probably not yet ready")
+	result, rpcErr := common.RawRequest("getblockchaininfo", []json.RawMessage{})
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+	var getblockchaininfoReply common.ZcashdRpcReplyGetblockchaininfo
+	err := json.Unmarshal(result, &getblockchaininfoReply)
+	if err != nil {
+		return nil, rpcErr
 	}
 
 	// TODO: also return block hashes here
-	return &walletrpc.BlockID{Height: uint64(latestBlock)}, nil
+	return &walletrpc.BlockID{Height: uint64(getblockchaininfoReply.Blocks)}, nil
 }
 
 // GetTaddressTxids is a streaming RPC that returns transaction IDs that have
