@@ -164,6 +164,10 @@ service CompactTxStreamer {
     // in the exclude list that don't exist in the mempool are ignored.
     rpc GetMempoolTx(Exclude) returns (stream CompactTx) {}
 
+    // Return a stream of current Mempool transactions. This will keep the output stream open while
+    // there are mempool transactions. It will close the returned stream when a new block is mined.
+    rpc GetMempoolStream(Empty) returns (stream RawTransaction) {}
+
     // GetTreeState returns the note commitment tree state corresponding to the given block.
     // See section 3.7 of the Zcash protocol specification. It returns several other useful
     // values also (even though they can be obtained using GetBlock).
