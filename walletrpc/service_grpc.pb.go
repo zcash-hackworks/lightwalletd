@@ -32,6 +32,9 @@ type CompactTxStreamerClient interface {
 	GetTaddressTxids(ctx context.Context, in *TransparentAddressBlockFilter, opts ...grpc.CallOption) (CompactTxStreamer_GetTaddressTxidsClient, error)
 	GetTaddressBalance(ctx context.Context, in *AddressList, opts ...grpc.CallOption) (*Balance, error)
 	GetTaddressBalanceStream(ctx context.Context, opts ...grpc.CallOption) (CompactTxStreamer_GetTaddressBalanceStreamClient, error)
+	// Get the historical and current prices
+	GetZECPrice(ctx context.Context, in *PriceRequest, opts ...grpc.CallOption) (*PriceResponse, error)
+	GetCurrentZECPrice(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*PriceResponse, error)
 	// Return the compact transactions currently in the mempool; the results
 	// can be a few seconds out of date. If the Exclude list is empty, return
 	// all transactions; otherwise return all *except* those in the Exclude list
@@ -206,6 +209,24 @@ func (x *compactTxStreamerGetTaddressBalanceStreamClient) CloseAndRecv() (*Balan
 	return m, nil
 }
 
+func (c *compactTxStreamerClient) GetZECPrice(ctx context.Context, in *PriceRequest, opts ...grpc.CallOption) (*PriceResponse, error) {
+	out := new(PriceResponse)
+	err := c.cc.Invoke(ctx, "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetZECPrice", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *compactTxStreamerClient) GetCurrentZECPrice(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*PriceResponse, error) {
+	out := new(PriceResponse)
+	err := c.cc.Invoke(ctx, "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetCurrentZECPrice", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *compactTxStreamerClient) GetMempoolTx(ctx context.Context, in *Exclude, opts ...grpc.CallOption) (CompactTxStreamer_GetMempoolTxClient, error) {
 	stream, err := c.cc.NewStream(ctx, &CompactTxStreamer_ServiceDesc.Streams[3], "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetMempoolTx", opts...)
 	if err != nil {
@@ -324,6 +345,9 @@ type CompactTxStreamerServer interface {
 	GetTaddressTxids(*TransparentAddressBlockFilter, CompactTxStreamer_GetTaddressTxidsServer) error
 	GetTaddressBalance(context.Context, *AddressList) (*Balance, error)
 	GetTaddressBalanceStream(CompactTxStreamer_GetTaddressBalanceStreamServer) error
+	// Get the historical and current prices
+	GetZECPrice(context.Context, *PriceRequest) (*PriceResponse, error)
+	GetCurrentZECPrice(context.Context, *Empty) (*PriceResponse, error)
 	// Return the compact transactions currently in the mempool; the results
 	// can be a few seconds out of date. If the Exclude list is empty, return
 	// all transactions; otherwise return all *except* those in the Exclude list
@@ -375,6 +399,12 @@ func (UnimplementedCompactTxStreamerServer) GetTaddressBalance(context.Context, 
 }
 func (UnimplementedCompactTxStreamerServer) GetTaddressBalanceStream(CompactTxStreamer_GetTaddressBalanceStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetTaddressBalanceStream not implemented")
+}
+func (UnimplementedCompactTxStreamerServer) GetZECPrice(context.Context, *PriceRequest) (*PriceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetZECPrice not implemented")
+}
+func (UnimplementedCompactTxStreamerServer) GetCurrentZECPrice(context.Context, *Empty) (*PriceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCurrentZECPrice not implemented")
 }
 func (UnimplementedCompactTxStreamerServer) GetMempoolTx(*Exclude, CompactTxStreamer_GetMempoolTxServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetMempoolTx not implemented")
@@ -565,6 +595,42 @@ func (x *compactTxStreamerGetTaddressBalanceStreamServer) Recv() (*Address, erro
 	return m, nil
 }
 
+func _CompactTxStreamer_GetZECPrice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PriceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CompactTxStreamerServer).GetZECPrice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetZECPrice",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CompactTxStreamerServer).GetZECPrice(ctx, req.(*PriceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CompactTxStreamer_GetCurrentZECPrice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CompactTxStreamerServer).GetCurrentZECPrice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetCurrentZECPrice",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CompactTxStreamerServer).GetCurrentZECPrice(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CompactTxStreamer_GetMempoolTx_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(Exclude)
 	if err := stream.RecvMsg(m); err != nil {
@@ -705,6 +771,14 @@ var CompactTxStreamer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTaddressBalance",
 			Handler:    _CompactTxStreamer_GetTaddressBalance_Handler,
+		},
+		{
+			MethodName: "GetZECPrice",
+			Handler:    _CompactTxStreamer_GetZECPrice_Handler,
+		},
+		{
+			MethodName: "GetCurrentZECPrice",
+			Handler:    _CompactTxStreamer_GetCurrentZECPrice_Handler,
 		},
 		{
 			MethodName: "GetTreeState",

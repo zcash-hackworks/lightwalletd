@@ -135,6 +135,26 @@ message GetAddressUtxosReplyList {
     repeated GetAddressUtxosReply addressUtxos = 1;
 }
 
+message PriceRequest {
+    // List of timestamps(in sec) at which the price is being requested
+    uint64 timestamp = 1;
+
+    // 3 letter currency-code
+    string currency = 2;
+}
+
+message PriceResponse {
+    // Timestamp at which this price quote was fetched. Note, this may not be the same
+    // as the request timestamp, but the server will respond with the closest timestamp that it has/can fetch    
+    int64 timestamp = 1;  
+    
+    // 3-letter currency code, matching the request
+    string currency = 2;  
+
+    // price of ZEC
+    double price = 3;
+}
+
 service CompactTxStreamer {
     // Return the height of the tip of the best chain
     rpc GetLatestBlock(ChainSpec) returns (BlockID) {}
@@ -152,6 +172,10 @@ service CompactTxStreamer {
     rpc GetTaddressTxids(TransparentAddressBlockFilter) returns (stream RawTransaction) {}
     rpc GetTaddressBalance(AddressList) returns (Balance) {}
     rpc GetTaddressBalanceStream(stream Address) returns (Balance) {}
+
+    // Get the historical and current prices 
+    rpc GetZECPrice(PriceRequest) returns (PriceResponse) {}
+    rpc GetCurrentZECPrice(Empty) returns (PriceResponse) {}
 
     // Return the compact transactions currently in the mempool; the results
     // can be a few seconds out of date. If the Exclude list is empty, return
